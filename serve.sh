@@ -5,9 +5,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-PORT="${1:-9191}"
+export PORT="${1:-9191}"
 
-echo "▶ Agent Studio 모니터 실행 중"
+echo "▶ Agent Studio 모니터 실행 중 (웹 승인 API 포함)"
 echo "  http://127.0.0.1:${PORT}/monitor.html"
 echo "  (종료: Ctrl+C)"
-python3 -m http.server "$PORT" --bind 127.0.0.1
+exec python3 approve-server.py

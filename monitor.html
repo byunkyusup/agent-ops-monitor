@@ -166,6 +166,25 @@
   .feed-row .fx{color:var(--text-log); font-size:13px; font-family:var(--mono);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 
+  /* web approval banner (opt-in) */
+  .approvals{position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:80;
+    width:min(560px,92vw); background:var(--surface-raised); border:1px solid var(--st-thinking);
+    border-radius:14px; padding:12px 14px; box-shadow:0 14px 44px rgba(0,0,0,.55)}
+  .ap-head{font:700 11px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+    color:var(--st-thinking); margin-bottom:8px; display:flex; align-items:center; gap:8px}
+  .ap-head::before{content:""; width:8px; height:8px; border-radius:50%; background:var(--st-thinking);
+    box-shadow:0 0 10px var(--st-thinking); animation:pulse 1.2s var(--ease) infinite}
+  .ap-row{display:flex; align-items:center; gap:12px; padding:8px 0; border-top:1px solid var(--line)}
+  .ap-row:first-of-type{border-top:0}
+  .ap-info{flex:1; min-width:0}
+  .ap-info b{color:var(--text-hi)} .ap-info .ap-tool{color:var(--text-low); font:var(--mono); font-size:11px; margin-left:6px}
+  .ap-sum{color:var(--text-mid); font:var(--mono); font-size:12px; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .ap-btns{display:flex; gap:8px; flex:0 0 auto}
+  .ap-btns button{border:0; border-radius:9px; padding:9px 16px; font:700 12px/1 var(--sans); cursor:pointer; transition:filter var(--dur-fast)}
+  .ap-ok{background:var(--st-working); color:oklch(18% 0.05 145)}
+  .ap-no{background:var(--st-blocked); color:oklch(20% 0.06 25)}
+  .ap-btns button:hover{filter:brightness(1.12)}
+
   /* ═══════ CHARACTER STATE COLORS ═══════ */
   .avatar.is-working{--st:var(--st-working)} .avatar.is-thinking{--st:var(--st-thinking)}
   .avatar.is-idle{--st:var(--st-idle)} .avatar.is-blocked{--st:var(--st-blocked)}
@@ -230,6 +249,7 @@
 </style>
 </head>
 <body style="background:#0b0e14">
+<div id="approvals" class="approvals" hidden aria-live="polite"></div>
 <div class="app">
   <header class="topbar">
     <div class="brand">
@@ -512,6 +532,30 @@ async function load(){
 load();
 setInterval(load, POLL_MS);
 setInterval(tick, 1000);
+
+/* ═══════ 웹 승인 (opt-in 세션의 PreToolUse 요청을 버튼으로 허가/거부) ═══════ */
+async function pollApprovals(){
+  let list=[];
+  try{ const r=await fetch("/api/pending?t="+Date.now(),{cache:"no-store"}); if(r.ok) list=await r.json(); }catch{}
+  const el=$("#approvals");
+  if(!Array.isArray(list)||!list.length){ el.hidden=true; el.innerHTML=""; return; }
+  el.hidden=false;
+  el.innerHTML = `<div class="ap-head">동의 대기 · ${list.length}건</div>` + list.map(r=>`
+    <div class="ap-row">
+      <div class="ap-info"><b>${esc(r.project||"")}</b><span class="ap-tool">${esc(r.tool||"")}</span>
+        <div class="ap-sum">${esc(r.summary||"")}</div></div>
+      <div class="ap-btns">
+        <button class="ap-ok" onclick="decide('${esc(r.id)}','allow')">승인</button>
+        <button class="ap-no" onclick="decide('${esc(r.id)}','deny')">거부</button>
+      </div></div>`).join("");
+}
+async function decide(id, decision){
+  try{ await fetch("/api/decision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,decision})}); }catch{}
+  pollApprovals();
+}
+window.decide = decide;
+pollApprovals();
+setInterval(pollApprovals, 1500);
 </script>
 </body>
 </html>
