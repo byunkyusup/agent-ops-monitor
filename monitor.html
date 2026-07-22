@@ -549,15 +549,39 @@ async function sendDecision(id, decision){
 async function decide(id, decision){ await sendDecision(id, decision); pollApprovals(); }
 window.decide = decide;
 
+let _seenPending = new Set();
+function beep(){
+  try{
+    const C = window.AudioContext||window.webkitAudioContext; if(!C) return;
+    const c=new C(); const o=c.createOscillator(); const g=c.createGain();
+    o.connect(g); g.connect(c.destination); o.type="sine"; o.frequency.value=880;
+    const t=c.currentTime; g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.16,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.35);
+    o.start(t); o.stop(t+0.36);
+  }catch{}
+}
+function alertPending(list){
+  const ids=list.map(r=>r.id);
+  const fresh=ids.filter(id=>!_seenPending.has(id));
+  _seenPending=new Set(ids);
+  if(!fresh.length) return;              // 새 요청이 있을 때만 알림
+  beep();
+  try{
+    if(window.Notification && Notification.permission==="granted")
+      new Notification("동의 필요 · Agent Studio",{body:`${list.length}건의 승인 대기 중`});
+  }catch{}
+}
 async function pollApprovals(){
   let list=[];
   try{ const r=await fetch("/api/pending?t="+Date.now(),{cache:"no-store"}); if(r.ok) list=await r.json(); }catch{}
   const el=$("#approvals");
-  if(!Array.isArray(list)||!list.length){ el.hidden=true; el.innerHTML=""; return; }
+  if(!Array.isArray(list)||!list.length){ el.hidden=true; el.innerHTML=""; _seenPending=new Set(); return; }
   const auto = $("#auto-approve") && $("#auto-approve").checked;
   if(auto){ await Promise.all(list.map(r=>sendDecision(r.id,"allow"))); el.hidden=true; el.innerHTML=""; return; }
+  alertPending(list);
   el.hidden=false;
-  el.innerHTML = `<div class="ap-head">동의 대기 · ${list.length}건</div>` + list.map(r=>`
+  el.innerHTML = `<div class="ap-head">⚠ 동의 대기 · ${list.length}건</div>` + list.map(r=>`
     <div class="ap-row">
       <div class="ap-info"><b>${esc(r.project||"")}</b><span class="ap-tool">${esc(r.tool||"")}</span>
         <div class="ap-sum">${esc(r.summary||"")}</div></div>
@@ -571,6 +595,7 @@ async function pollApprovals(){
 (function initAutoApprove(){
   const cb=$("#auto-approve"), lb=$("#aa-label");
   if(!cb) return;
+  try{ if(window.Notification && Notification.permission==="default") Notification.requestPermission(); }catch{}
   cb.checked = localStorage.getItem("aa")==="1";
   lb.classList.toggle("on", cb.checked);
   cb.addEventListener("change", ()=>{
