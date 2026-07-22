@@ -55,7 +55,7 @@
   /* ═══════════════ LAYOUT ═══════════════ */
   .app{ display:grid; gap:var(--gap); max-width:1440px; margin:0 auto; position:relative; z-index:1;
     grid-template-columns:1.65fr 1fr;
-    grid-template-areas:"header header" "scene cards" "kpis feed"; }
+    grid-template-areas:"header header" "kpis kpis" "scene feed" "cards feed"; }
   .topbar{grid-area:header}
   #scene-wrap{grid-area:scene} #cards{grid-area:cards}
   #kpis{grid-area:kpis} #feed-wrap{grid-area:feed}
@@ -184,6 +184,12 @@
   .ap-ok{background:var(--st-working); color:oklch(18% 0.05 145)}
   .ap-no{background:var(--st-blocked); color:oklch(20% 0.06 25)}
   .ap-btns button:hover{filter:brightness(1.12)}
+  .autoapprove{display:inline-flex; align-items:center; gap:7px; font:600 10px/1 var(--mono);
+    letter-spacing:.08em; text-transform:uppercase; color:var(--text-low); cursor:pointer;
+    user-select:none; padding:7px 11px; border:1px solid var(--line); border-radius:99px; white-space:nowrap}
+  .autoapprove input{accent-color:var(--st-thinking); width:14px; height:14px; cursor:pointer; margin:0}
+  .autoapprove.on{color:var(--st-thinking); border-color:var(--st-thinking);
+    background:color-mix(in oklch, var(--st-thinking) 12%, transparent)}
 
   /* ═══════ CHARACTER STATE COLORS ═══════ */
   .avatar.is-working{--st:var(--st-working)} .avatar.is-thinking{--st:var(--st-thinking)}
@@ -229,7 +235,7 @@
 
   /* ═══════════════ RESPONSIVE ═══════════════ */
   @media (max-width:1024px){
-    .app{grid-template-columns:1fr; grid-template-areas:"header" "scene" "kpis" "cards" "feed"}
+    .app{grid-template-columns:1fr; grid-template-areas:"header" "kpis" "feed" "scene" "cards"}
     #cards{display:grid; grid-template-columns:repeat(2,1fr); max-height:none}
   }
   @media (max-width:768px){
@@ -257,6 +263,9 @@
       <div><h1>AGENT&nbsp;STUDIO</h1><small>24/7 · MULTI-SESSION OPS</small></div>
     </div>
     <span class="spacer"></span>
+    <label class="autoapprove" id="aa-label" title="대기 중인 승인 요청을 자동으로 허가합니다">
+      <input type="checkbox" id="auto-approve"> 자동 승인
+    </label>
     <div class="clockbox">
       <div><span class="lbl">Uptime</span><br><b id="uptime">–</b></div>
       <div><span class="lbl">Local</span><br><b id="clock">–</b></div>
@@ -534,11 +543,19 @@ setInterval(load, POLL_MS);
 setInterval(tick, 1000);
 
 /* ═══════ 웹 승인 (opt-in 세션의 PreToolUse 요청을 버튼으로 허가/거부) ═══════ */
+async function sendDecision(id, decision){
+  try{ await fetch("/api/decision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,decision})}); }catch{}
+}
+async function decide(id, decision){ await sendDecision(id, decision); pollApprovals(); }
+window.decide = decide;
+
 async function pollApprovals(){
   let list=[];
   try{ const r=await fetch("/api/pending?t="+Date.now(),{cache:"no-store"}); if(r.ok) list=await r.json(); }catch{}
   const el=$("#approvals");
   if(!Array.isArray(list)||!list.length){ el.hidden=true; el.innerHTML=""; return; }
+  const auto = $("#auto-approve") && $("#auto-approve").checked;
+  if(auto){ await Promise.all(list.map(r=>sendDecision(r.id,"allow"))); el.hidden=true; el.innerHTML=""; return; }
   el.hidden=false;
   el.innerHTML = `<div class="ap-head">동의 대기 · ${list.length}건</div>` + list.map(r=>`
     <div class="ap-row">
@@ -549,11 +566,20 @@ async function pollApprovals(){
         <button class="ap-no" onclick="decide('${esc(r.id)}','deny')">거부</button>
       </div></div>`).join("");
 }
-async function decide(id, decision){
-  try{ await fetch("/api/decision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,decision})}); }catch{}
-  pollApprovals();
-}
-window.decide = decide;
+
+/* 자동 승인 토글 (localStorage 유지) */
+(function initAutoApprove(){
+  const cb=$("#auto-approve"), lb=$("#aa-label");
+  if(!cb) return;
+  cb.checked = localStorage.getItem("aa")==="1";
+  lb.classList.toggle("on", cb.checked);
+  cb.addEventListener("change", ()=>{
+    localStorage.setItem("aa", cb.checked?"1":"0");
+    lb.classList.toggle("on", cb.checked);
+    if(cb.checked) pollApprovals();
+  });
+})();
+
 pollApprovals();
 setInterval(pollApprovals, 1500);
 </script>
