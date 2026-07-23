@@ -1,0 +1,21 @@
+# Agent Studio 모니터 — 계속 떠 있는 로컬 서버.
+#   docker compose up -d --build   # 백그라운드 실행
+#   docker compose logs -f         # 로그 보기
+#   docker compose down            # 종료
+services:
+  monitor:
+    build: .
+    container_name: agent-ops-monitor
+    # 데스크톱/재부팅 후에도 자동 재기동. (수동 down 하면 안 뜸)
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 9191
+    # 호스트에는 127.0.0.1 로만 노출 = 로컬 전용 유지(외부 네트워크 차단).
+    ports:
+      - "127.0.0.1:9191:9191"
+    # 프로젝트 디렉터리 전체를 마운트 → 호스트 훅이 쓰는 activity.jsonl /
+    # approvals/ 를 컨테이너가 그대로 읽고, 웹UI 결정도 호스트로 다시 반영된다.
+    volumes:
+      - .:/app
+    working_dir: /app

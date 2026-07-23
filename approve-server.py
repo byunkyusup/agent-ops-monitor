@@ -14,6 +14,9 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 PEND = os.path.join(ROOT, "approvals", "pending")
 DEC = os.path.join(ROOT, "approvals", "decisions")
 PORT = int(os.environ.get("PORT", "9191"))
+# 바인딩 주소. 기본은 로컬 전용(127.0.0.1).
+# 컨테이너 안에서는 HOST=0.0.0.0 로 열고, 호스트 포트 공개를 127.0.0.1 로 제한한다.
+HOST = os.environ.get("HOST", "127.0.0.1")
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -74,6 +77,6 @@ class Server(socketserver.ThreadingTCPServer):
 if __name__ == "__main__":
     os.makedirs(PEND, exist_ok=True)
     os.makedirs(DEC, exist_ok=True)
-    with Server(("127.0.0.1", PORT), Handler) as httpd:
-        print(f"▶ Agent Studio: http://127.0.0.1:{PORT}/monitor.html  (승인 API 포함)")
+    with Server((HOST, PORT), Handler) as httpd:
+        print(f"▶ Agent Studio: http://127.0.0.1:{PORT}/monitor.html  (승인 API 포함, bind={HOST})")
         httpd.serve_forever()

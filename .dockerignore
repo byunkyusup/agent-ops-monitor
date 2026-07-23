@@ -1,0 +1,7 @@
+.git
+.playwright-mcp
+.DS_Store
+activity.jsonl
+approvals
+docs
+*.md
